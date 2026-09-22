@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoastFI - you're one spreadsheet away from knowing when you can stop</title>
+<style>
+  :root { --bg:#0f1417; --panel:#152026; --line:#274049; --text:#edf5f7; --dim:#8ba8b2; --accent:#5ad4c8; --good:#8be0a4; --warn:#ffcf7a; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:26px 14px 44px; }
+  h1 { font-size:30px; }
+  .sub { color:var(--dim); margin:6px 0 18px; font-size:14px; text-align:center; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; width:min(640px, 94vw); margin-bottom:14px; }
+  .card h2 { font-size:15px; margin-bottom:10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+  input { background:#0b1114; border:1px solid var(--line); border-radius:8px; color:var(--text); padding:8px 10px; font-size:13px; width:100%; }
+  label { color:var(--dim); font-size:11px; display:block; margin-bottom:4px; }
+  .big3 { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+  .stat { background:#0b1114; border:1px solid var(--line); border-radius:10px; padding:14px; text-align:center; }
+  .stat .n { font-size:24px; font-weight:900; }
+  .stat .l { color:var(--dim); font-size:11px; margin-top:4px; line-height:1.5; }
+  .bar { height:8px; background:#0b1114; border-radius:4px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .barlabel { display:flex; justify-content:space-between; color:var(--dim); font-size:12px; margin-top:6px; }
+  .badge { display:inline-block; font-size:12px; font-weight:700; padding:3px 12px; border-radius:20px; margin-top:8px; }
+  .b-yes { background:var(--good); color:#0f1417; }
+  .b-no { background:#23424d; color:var(--accent); }
+  .note { color:var(--dim); font-size:12px; margin-top:10px; line-height:1.6; }
+  .foot { margin-top:14px; color:var(--dim); font-size:13px; }
+  a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<h1>CoastFI</h1>
+<div class="sub">"when can I stop working?" is one compound-interest question. run it.</div>
+
+<div class="card">
+  <h2>Your numbers</h2>
+  <div class="grid">
+    <div><label>Annual spending</label><input id="in-exp" type="number" min="0" step="any" value="48000"></div>
+    <div><label>Invested savings</label><input id="in-sav" type="number" min="0" step="any" value="120000"></div>
+    <div><label>Monthly contribution</label><input id="in-con" type="number" min="0" step="any" value="1500"></div>
+    <div><label>Annual return %</label><input id="in-ret" type="number" min="0" step="any" value="7"></div>
+    <div><label>Current age</label><input id="in-age" type="number" min="0" step="1" value="32"></div>
+    <div><label>Traditional retire age</label><input id="in-rage" type="number" min="0" step="1" value="65"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Your finish lines</h2>
+  <div class="big3">
+    <div class="stat"><div class="n" id="out-fi">-</div><div class="l">FI number<br>(4% rule)</div></div>
+    <div class="stat"><div class="n" id="out-years">-</div><div class="l" id="out-fiage">to financial independence</div></div>
+    <div class="stat"><div class="n" id="out-coast">-</div><div class="l">coast number<br>(grow-only to retirement)</div></div>
+  </div>
+  <div class="bar"><i id="out-bar" style="width:0%"></i></div>
+  <div class="barlabel"><span id="out-pct">0% of FI</span><span id="out-left"></span></div>
+  <div id="out-badge"></div>
+  <div class="note" id="out-note"></div>
+</div>
+
+<div class="foot"><a href="index.html">&larr; about</a></div>
+
+<script src="engine.js?v=1"></script>
+<script>
+(function () {
+  var KEY = 'coastfi-v1';
+  var ids = ['in-exp', 'in-sav', 'in-con', 'in-ret', 'in-age', 'in-rage'];
+
+  function money(n) {
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    return '$' + Math.round(n).toLocaleString();
+  }
+  function save() {
+    try {
+      var o = {};
+      ids.forEach(function (id) { o[id] = document.getElementById(id).value; });
+      localStorage.setItem(KEY, JSON.stringify(o));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      var o = JSON.parse(localStorage.getItem(KEY));
+      if (o) ids.forEach(function (id) { if (o[id] !== undefined) document.getElementById(id).value = o[id]; });
+    } catch (e) {}
+  }
+  function num(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+  function render() {
+    var p = CoastFI.plan({
+      annualExpenses: num('in-exp'),
+      savings: num('in-sav'),
+      monthlyContrib: num('in-con'),
+      annualReturn: (num('in-ret') || 0) / 100,
+      currentAge: num('in-age'),
+      retireAge: num('in-rage')
+    });
+    document.getElementById('out-fi').textContent = money(p.fi);
+    if (p.yearsToFI === null) {
+      document.getElementById('out-years').textContent = 'never';
+      document.getElementById('out-fiage').textContent = 'at this rate, not within 60 years';
+    } else {
+      document.getElementById('out-years').textContent = p.yearsToFI === 0 ? 'now' : p.yearsToFI + ' yrs';
+      document.getElementById('out-fiage').textContent = p.yearsToFI === 0 ? 'you are already financially independent' : 'to FI - you get there at ' + Math.round(p.fiAge);
+    }
+    document.getElementById('out-coast').textContent = money(p.coastNumber);
+    document.getElementById('out-bar').style.width = Math.round(p.progress * 100) + '%';
+    document.getElementById('out-pct').textContent = Math.round(p.progress * 100) + '% of FI';
+    document.getElementById('out-left').textContent = p.progress >= 1 ? 'done' : money(p.fi - num('in-sav')) + ' to go';
+    var badge = document.getElementById('out-badge');
+    badge.innerHTML = p.coastReached
+      ? '<span class="badge b-yes">coast reached - you could stop saving today and still retire at ' + num('in-rage') + '</span>'
+      : '<span class="badge b-no">' + money(p.coastNumber - num('in-sav')) + ' more to coast point</span>';
+    document.getElementById('out-note').textContent = p.coastReached
+      ? 'Every dollar you invest from here is for retiring earlier or living larger - the baseline is secured.'
+      : 'Coast point is the savings level where growth alone reaches your FI number by ' + num('in-rage') + ' with zero further contributions.';
+    save();
+  }
+
+  ids.forEach(function (id) { document.getElementById(id).addEventListener('input', render); });
+
+  // test hook
+  window.__cf = {
+    set: function (exp, sav, con, ret, age, rage) {
+      document.getElementById('in-exp').value = exp;
+      document.getElementById('in-sav').value = sav;
+      document.getElementById('in-con').value = con;
+      document.getElementById('in-ret').value = ret;
+      document.getElementById('in-age').value = age;
+      document.getElementById('in-rage').value = rage;
+      render();
+    },
+    read: function () {
+      return {
+        fi: document.getElementById('out-fi').textContent,
+        years: document.getElementById('out-years').textContent,
+        fiage: document.getElementById('out-fiage').textContent,
+        coast: document.getElementById('out-coast').textContent,
+        pct: document.getElementById('out-pct').textContent,
+        badge: document.getElementById('out-badge').textContent
+      };
+    }
+  };
+
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
